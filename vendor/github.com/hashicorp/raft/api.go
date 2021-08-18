@@ -728,6 +728,9 @@ func (r *Raft) Leader() ServerAddress {
 // An optional timeout can be provided to limit the amount of time we wait
 // for the command to be started. This must be run on the leader or it
 // will fail.
+//
+//
+// 
 func (r *Raft) Apply(cmd []byte, timeout time.Duration) ApplyFuture {
 	return r.ApplyLog(Log{Data: cmd}, timeout)
 }

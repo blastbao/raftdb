@@ -11,8 +11,8 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/hanj4096/raftdb/http"
-	"github.com/hanj4096/raftdb/store"
+	"github.com/blastbao/raftdb/http"
+	"github.com/blastbao/raftdb/store"
 )
 
 // Command line defaults
@@ -72,10 +72,14 @@ func main() {
 
 	// Wait until the store is in full consensus.
 	openTimeout := 120 * time.Second
+
+	// 等待 raft leader 成功加入集群（有可能本节点即为 Leader ，需要 raft 框架决定）
 	s.WaitForLeader(openTimeout)
+	// 等待 log 同 raft leader 同步完成
 	s.WaitForApplied(openTimeout)
 
 	// This may be a standalone server. In that case set its own metadata.
+	// 保存 NodeId 和 Http Api Addr 的映射关系到 FSM 中，这个映射会同步到整个 Raft 集群。
 	if err := s.SetMeta(nodeID, httpAddr); err != nil && err != store.ErrNotLeader {
 		// Non-leader errors are OK, since metadata will then be set through
 		// consensus as a result of a join. All other errors indicate a problem.
@@ -96,7 +100,11 @@ func main() {
 }
 
 func join(joinAddr, httpAddr, raftAddr, nodeID string) error {
-	b, err := json.Marshal(map[string]string{"httpAddr": httpAddr, "raftAddr": raftAddr, "id": nodeID})
+	b, err := json.Marshal(map[string]string{
+		"httpAddr": httpAddr,
+		"raftAddr": raftAddr,
+		"id": nodeID,
+	})
 	if err != nil {
 		return err
 	}

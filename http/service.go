@@ -11,7 +11,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/hanj4096/raftdb/store"
+	"github.com/blastbao/raftdb/store"
 )
 
 // Store is the interface Raft-backed key-value stores must implement.
@@ -131,18 +131,21 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.store.Join(nodeID, httpAddr, raftAddr); err != nil {
+		// 只有 Leader 能够处理 Join 请求
 		if err == store.ErrNotLeader {
+			// 查询 Leader Api Addr
 			leader := s.store.LeaderAPIAddr()
 			if leader == "" {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return
 			}
+			// 将请求重定向到 Leader Api Addr
 			redirect := s.FormRedirect(r, leader)
-			//http.Redirect(w, r, redirect, http.StatusMovedPermanently)
 			http.Redirect(w, r, redirect, http.StatusTemporaryRedirect)
 			return
 		}
 
+		// 返回错误
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -174,6 +177,7 @@ func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch r.Method {
+	// Read
 	case "GET":
 		k := getKey()
 		if k == "" {
@@ -190,28 +194,31 @@ func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
 		v, err := s.store.Get(k, lvl)
 		if err != nil {
 			if err == store.ErrNotLeader {
+				// 获取 Leader 地址
 				leader := s.store.LeaderAPIAddr()
 				if leader == "" {
 					http.Error(w, err.Error(), http.StatusServiceUnavailable)
 					return
 				}
+				// 将请求重定向到 Leader
 				redirect := s.FormRedirect(r, leader)
-				//http.Redirect(w, r, redirect, http.StatusMovedPermanently)
 				http.Redirect(w, r, redirect, http.StatusTemporaryRedirect)
 				return
 			}
+			// 报错返回
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
+		// 返回数据
 		b, err := json.Marshal(map[string]string{k: v})
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-
 		io.WriteString(w, string(b))
 
+	// Set
 	case "POST":
 		// Read the value from the POST body.
 		m := map[string]string{}
@@ -227,13 +234,10 @@ func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
 						http.Error(w, err.Error(), http.StatusServiceUnavailable)
 						return
 					}
-
 					redirect := s.FormRedirect(r, leader)
-					//http.Redirect(w, r, redirect, http.StatusMovedPermanently)
 					http.Redirect(w, r, redirect, http.StatusTemporaryRedirect)
 					return
 				}
-
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
